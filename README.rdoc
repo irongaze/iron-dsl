@@ -1,0 +1,149 @@
+= GEM: iron-dsl
+
+Written by Rob Morris @ Irongaze Consulting LLC (http://irongaze.com)
+
+== DESCRIPTION
+
+The iron-dsl gem provides a set of powerful tools for building "domain-specific languages"
+in Ruby.  Ruby's natural DSL construction capabilities (through, e.g. instance_eval) are
+very solid, but to make truly clean DSLs requires additional magic.  This gem provides
+that magic in a nice self-contained package.
+
+== USAGE
+
+There are 3 main pieces to this gem: DslBuilder, a set of accessor helpers, and DslProxy.
+
+DslBuilder is simply an empty class, suitable for use as a base class for your DSL receiver class.
+It is similar to BasicObject in the standard library, but has methods such as #respond_to? 
+and #send that are required for any real DSL building effort.
+
+You can use DslBuilder, or any other class, as the basis for your DSL system.  In any case,
+you want a clean way to set attributes on an instance of that class.  For that, we have
+two class-level methods: #dsl_accessor and #dsl_flag
+
+The first, #dsl_accessor, is a helpful method for defining accessors on DSL builder-style classes:
+
+    require 'iron/dsl'
+
+    class MyBuilder < DslBuilder
+      # Declare an accessor on this receiver class, just like you'd use attr_accessor
+      dsl_accessor :name
+    end
+    
+    # When you create an instance, you have a set of behavior for the #name accessor you declared
+    builder = MyBuilder.new
+    
+    # You can set a value by calling #name as a setter, and get the value by using #name as a getter
+    builder.name = 'ProjectX'
+    builder.name # => 'ProjectX'
+    
+    # But you can also set the value by simply calling #name with the value to set:
+    builder.name 'ProjectY'
+    builder.name  # => 'ProjectY'
+    
+    # This makes for a cleaner syntax when using your DSL with DslProxy#exec below..
+    DslProxy.exec(builder) do
+      name 'Project Omega'
+    end
+    builder.name  # => 'Project Omega'
+    
+    # You can also capture blocks this way, which is often useful in DSL creation for values
+    # that need to be dynamically calculated at run-time
+    builder.name do
+      "Project " + Date.today
+    end
+    
+The second accessor helper is #dsl_flag, which is the same as #dsl_accessor, but designed for 
+boolean values.
+
+    class AnotherBuilder < DslBuilder
+      dsl_flag :awesome
+    end
+    
+    builder = AnotherBuilder
+    builder.awesome?  # => false on uninitialized value
+    builder.awesome!  # => sets @awesome to true
+    # dsl_flags can still be set normally
+    builder.awesome true
+    builder.awesome false
+    
+Bringing it all together, and the key to the whole system, is DslProxy.  DslProxy is a more powerful version of
+#instance_exec that handles instance variable propagation and other nifty tricks like nesting and propagating 
+method references and constant lookups to the calling scope.  That all sounds like gibberish, so here's a few
+hopefully illustrative examples.
+
+    @name = 'Bob'
+    
+    # First, how you would traditionally do it:
+    instance_exec(some_receiver) do
+      # This fails - the instance var from the calling context is not defined.  Sucks if you're in Rails
+      # and trying to define something in a controller or view, where all the state is typically in
+      # instance vars!
+      self.name = @name
+    end
+    
+    # This, however, totally works
+    DslProxy.exec(some_receiver) do
+      # @name has bubbled into our block and can be referenced!
+      self.name = @name
+      # But of course, we'd use a dsl_accessor so we could lose the 'self.' and the '='
+      name @name
+      
+      # Having nested DSLs is also supported, all instance vars are available at all levels
+      sub_define do
+        page_title @name + ' Likes Bees'
+      end
+    end
+
+In summary, making DSLs is a bit of an art, and what this gem attempts to do is make pretty DSLs like this
+easier to build:
+
+    grid = Grid.define do
+      url '/orders/grid'
+      souce Order.by_date
+  
+      columns do
+        column :id
+        column :customer do
+          no_wrap!
+        column :total do
+          render_as :currency
+        end
+      end
+      
+      pagination do
+        default 40
+        allow_custom!
+      end
+    end
+
+Using code to configure complex systems (rather than hashes of hashes, or manually constructed settings objects)
+allows for a much more expressive codebase.  At Irongaze, we use this type of builder for grid controls, pagination,
+filters, forms, fields, and so forth.  Places where the MVC system breaks down, and complexity that bridges
+controller and view needs to be managed.
+      
+== SYNOPSIS
+
+To use:
+
+    require 'iron/dsl'
+    
+After that, simply write code to make use of the new extensions and helper classes.
+
+== REQUIREMENTS
+
+* Ruby 1.9.2 or later
+
+== INSTALL
+
+To install, simply run:
+
+    sudo gem install iron-dsl
+
+RVM users should drop the 'sudo':
+
+    gem install iron-dsl
+    
+Then simply require the library:
+
+    require 'iron/dsl'

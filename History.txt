@@ -1,0 +1,5 @@
+== 1.0.0 / 2015-01-26
+
+* Broke out iron-dsl from older iron-extensions gem
+* Improved documentation a bit
+* Updated dsl_accessor to capture blocks
